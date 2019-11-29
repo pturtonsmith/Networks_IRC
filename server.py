@@ -6,6 +6,21 @@ Header_Length = 10
 IP = "127.0.0.1"
 PORT = 1234
 
+class Channels(object):
+	def __init__(self, name):
+		self.name = name
+		self.members = set()
+
+	def AddUserToChannel(self, client):
+		if client not in members:
+			self.members.add(client)
+		else:
+			print "Member exists"
+
+	def RemoveUserFromChannel(self, client):
+		self.members.discard(client)
+		
+
 # Creating socket with IPv4 and TCP
 Server_Socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
