@@ -27,9 +27,19 @@ while True:
 
 	# Sending message
 	if Message:
-		Message = Message.encode('utf-8')
-		Message_Header = f"{len(Message):^{Header_Length}}".encode('utf-8')
-		Client_Socket.send(Message_Header + Message)
+		# filter the message to check for keywords - will be used for commands later
+		# filters by word, e.g. if searching for "ass" and the user says "classic", it will not give a false positive
+		term = "!join" #term we want to search for - just a placeholder for now
+		input = raw_input() #read input from user
+
+		words = input.split() #split the sentence into individual words
+
+		if term in words: #see if one of the words in the sentence is the word we want
+            # TODO commands in here - using more if statements maybe?
+        else:
+   			Message = Message.encode('utf-8')
+    		Message_Header = f"{len(Message):^{Header_Length}}".encode('utf-8')
+    		Client_Socket.send(Message_Header + Message)
 
 	# Checking for received messages from other users
 	try:
