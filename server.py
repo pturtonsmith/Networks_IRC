@@ -7,19 +7,31 @@ IP = "127.0.0.1"
 PORT = 1234
 
 class Channels(object):
+
+	name = ""
+	members = ""
+
+	# Class constructor
 	def __init__(self, name):
 		self.name = name
 		self.members = set()
+
 
 	def AddUserToChannel(self, client):
 		if client not in members:
 			self.members.add(client)
 		else:
-			print "Member exists"
+			print('Member already exists in this channel.')
+
 
 	def RemoveUserFromChannel(self, client):
 		self.members.discard(client)
 		
+
+def make_channel():
+	channel = Channel(name, members)
+	return channel
+
 
 # Creating socket with IPv4 and TCP
 Server_Socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,7 +53,7 @@ Clients = {}
 
 print(f'Listening for connections on {IP}:{PORT}')
 
-# Recevie message
+# Receive message
 def receive_message(Client_Socket):
 
 	try:
@@ -107,7 +119,9 @@ while True:
 				if Client_Socket != Connected_Socket:
 					Client_Socket.send(User['header'] + User['data'] + Message['header'] + Message['data'])
 
+    #if
+
 	# Exception handling
 	for Connected_Socket in Exception_Sockets:
 		Sockets_List.remove(Connected_Socket)
-		del Clients[Connected_Socket]	
+		del Clients[Connected_Socket]
