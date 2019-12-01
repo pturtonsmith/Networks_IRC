@@ -35,11 +35,15 @@ while True:
 		words = input.split() #split the sentence into individual words
 
 		if term in words: #see if one of the words in the sentence is the word we want
-            # TODO commands in here - using more if statements maybe?
-        else:
-   			Message = Message.encode('utf-8')
-    		Message_Header = f"{len(Message):^{Header_Length}}".encode('utf-8')
-    		Client_Socket.send(Message_Header + Message)
+			# TODO commands in here - using more if statements maybe?
+			# Need to store info about which channel the client uses:
+			# clients[client_socket] = {'name': User, 'channel': Channel} -> something like this maybe?
+
+		# if no command then treat the input as a message to be sent to other users
+		else:
+			Message = Message.encode('utf-8')
+			Message_Header = f"{len(Message):^{Header_Length}}".encode('utf-8')
+			Client_Socket.send(Message_Header + Message)
 
 	# Checking for received messages from other users
 	try:
