@@ -38,6 +38,7 @@ while True:
 			# TODO commands in here - using more if statements maybe?
 			# Need to store info about which channel the client uses:
 			# clients[client_socket] = {'name': User, 'channel': Channel} -> something like this maybe?
+			# then create list of users for each channel -> channels["channel name"] = [user1, user2, etc.]
 
 		# if no command then treat the input as a message to be sent to other users
 		else:
