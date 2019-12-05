@@ -7,20 +7,22 @@ from random import randint
 import errno
 import sys
 
+
+# Connection details
 serverIP = "10.0.42.17"
 port = 6667
 channel = "#test"
 
+# Setup socket
 irc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
-def joinServer():
-    botuname = "PRObot"
-    print("Connecting to: " + serverIP + " as " + botuname)
+def joinServer(): # Join server
+    print("Connecting to: " + serverIP + " as " + uname)
     irc.connect((serverIP, port))
     # Attempt to connect to IRC server, send username & nickname
-    irc.send(bytes("NICK " + botuname + "\r\n", "utf-8"))
-    irc.send(bytes("USER " + botuname + " " + botuname + " * :PRObot\r\n", "utf-8"))
+    irc.send(bytes("NICK " + uname + "\r\n", "utf-8"))
+    irc.send(bytes("USER " + uname + " " + uname + " * :PRObot\r\n", "utf-8"))
     reply = irc.recv(1024).decode("utf-8")
     individMsg = reply.split('\r\n')
     initErrNotFound = True
@@ -35,7 +37,7 @@ def joinServer():
             else:
                 initErrNotFound = False
             if(splitMsg[1] == "433") and nickErrNotFound: # If nickname already taken, another bot is running
-                print("Nickname already in use, please disconnect other bot and try again")
+                print("Nickname already in use, please disconnect other user/bot and try again")
                 sys.exit(1)
             else:
                 nickErrNotFound = False
@@ -43,7 +45,6 @@ def joinServer():
     time.sleep(2)
     irc.send(bytes("JOIN " + channel + "\n", "utf-8")) # Join channel 
     reply = irc.recv(2048).decode("utf-8")
-    print(reply)
     
 
 def parseCommand(input): # Determine type of message - ping, channel message or direct message (PM)
@@ -59,7 +60,7 @@ def parseCommand(input): # Determine type of message - ping, channel message or 
         reciprient = split[2]
         if ('#' in reciprient): # If channel
             channelMsg(reciprient, message)
-        elif (botuname in reciprient): # Or if private message to bot
+        elif (uname in reciprient): # Or if private message to bot
             privMsg(sender, message)
 
 
@@ -140,6 +141,15 @@ def msgReply(reciprient, msg): # Formats and sends a message in response
     irc.send(encodeMsg)
     
 
+def disconnect(): # Disconnect from server gracefully
+    fullMsg = "QUIT " + uname
+    print(fullMsg)
+    irc.send(fullMsg.encode("utf-8"))
+    reply = irc.recv(1024).decode("utf-8")
+    while fullMsg not in reply:
+        reply = irc.recv(1024).decode("utf-8")
+
+
 uname = "IRC_Bot"
 joinServer()
 
@@ -152,11 +162,16 @@ try: # While program is running, try to recieve messages
         parseCommand(msg) # Determine type of message & reply
 
 # Error handling
+except KeyboardInterrupt: # If interrupted by user entering Ctrl-C then ensure a clean exit from server first
+    print("Disconnecting from server...")
+    disconnect()
+    sys.exit(1)
 except IOError as ex:
     if ex.errno != errno.EAGAIN and ex.errno != errno.EWOULDBLOCK:
         print('IO Error: {}'.format(str(ex)))
-        sys.exit()
+        sys.exit(1)
 # Error handling
 except Exception as ex:
     print('Error: {}'.format(str(ex)))
-    sys.exit()
+    sys.exit(1)
+

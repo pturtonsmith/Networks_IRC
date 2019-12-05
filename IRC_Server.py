@@ -3,92 +3,148 @@ import select
 import socket
 import string
 import sys
-import time
 
 
+
+
+"""
+This function is taken from the following source:
+
+https://github.com/jrosdahl/miniircd/blob/master/miniircd
+"""
 def buffer_to_socket(msg):
 	return msg.encode()
 
+"""
+This function is taken from the following source:
+
+https://github.com/jrosdahl/miniircd/blob/master/miniircd
+"""
 def socket_to_buffer(buf):
 	return buf.decode(errors="ignore")
 
+
+
+
+
+
+
+
+###################################### CHANNEL CLASS START ######################################################
+
+"""
+
+Handle all channel activities
+
+"""
 class Channel(object):
+
+	# constructor
 	def __init__(self, server, name):
 		print("Creating channel with name " + name)
 		self.server = server
 		self.name = name
-		self.members = set()
+		self.members = set() # initializing with no members
 
-	def add_member(self, client):
+	# add member to a existing channel
+	def addMember(self, client):
 		print(sys._getframe().f_code.co_name)
 		self.members.add(client)
 
-	def remove_client(self, client):
+
+	# remove member from a existing channel and if last member leave the channel the channel delete itself
+	def removeClient(self, client):
 		print(sys._getframe().f_code.co_name)
 		self.members.discard(client)
-		if not self.members:
-			client.server.remove_channel(self)
+		if not self.members: # remove the channel if no members left on the channel
+			client.server.removeChannel(self)
 	
 
 
+
+############################################## CHANNEL CLASS END ####################################################
+
+
+
+
+############################################## CLIENT CLASS START ###################################################################
+
+"""
+
+Handle all client activities
+
+"""
 class Client(object):
+
+	# constructor
 	def __init__(self, server, socket):
 		print(__name__ + " client")
 		self.server = server
 		self.socket = socket
-		self.channels = {}
+		self.channels = {}   # stores all the channel names the client joins
 		self.nickname = None
 		self.user = None
 		self.realname = None
 
-		self.host, self.port = socket.getpeername()
+		self.host, self.port = socket.getpeername() # get host and port of the client
 
-		self.readbuffer = ""
-		self.writebuffer = ""
-		
+		self.readbuffer = ""     # initialize empty readbuffer
+		self.writebuffer = ""    # initialize empty witebuffer
+	
+	
+	# returns client information
 	def get_prefix(self):
 		print(sys._getframe().f_code.co_name)
 		return "%s!%s@%s" % (self.nickname, self.user, self.host)
 	prefix = property(get_prefix)
 
-	def wite_queue_size(self):
+
+	# returns the size of writebuffer
+	def write(self):
 		return len(self.writebuffer)
 
-	def __parse_read_buffer(self):
+
+	# read user inputs and check for commands and arguments
+	def read(self):
 		print(sys._getframe().f_code.co_name)
 		lines = self.readbuffer
 		self.readbuffer = lines[-1]
 		lines = lines[:-1]
 		print(lines)
-		for line in lines.split('\r\n'):
+		for line in lines.split('\r\n'): # splits the input from the user
 			print(line)
 			if not line:
 				continue
 			x = line.split(" ", 1)
-			command = x[0]
+			command = x[0]  # storing the command from user
 			
 			if len(x) == 1:
 				arguments = []
 			else:
 				if len(x[1]) > 0 and x[1][0] == ":":
-					arguments = [x[1][1:]]
+					arguments = [x[1][1:]]   # storing the command arguments from the user
 				else:
 					y = x[1].split(" :", 1)
-					arguments = y[0].split()
+					arguments = y[0].split() # spliting arguments to check if there more than one argument exists
 					if len(y) == 2:
 						arguments.append(y[1])
 				print(command)
 				print(arguments)
-				self.__command_handler(command, arguments)
+				self.handleCommand(command, arguments) # handling the user command and arguments
 				
 
+	# write given message to the writebuffer
 	def message(self, msg):
 		print(sys._getframe().f_code.co_name)
 		print("client: ", self.user, " @ ", self.host)
-		self.writebuffer += msg + "\r\n"
+		self.writebuffer += msg + "\r\n" # writing to the buffer
 
-	def __command_handler(self, command, arguments):
-		def user_handler():
+
+	# handle all the user commands and take actions according to the given command
+	def handleCommand(self, command, arguments):
+
+		# IRC USER command handler
+		def USER():
 			print("User handler")
 			if len(arguments) < 4:
 				self.message("Not enough parameters")
@@ -105,16 +161,25 @@ class Client(object):
 				self.message(pt3confirmMessage)
 
 
-		def nick_handler():
+		# IRC NICK command handler
+		def NICK():
 			print("Nick handler")
 			if len(arguments) < 1:
 				self.message("Not enough parameters")
 			print(arguments)
+			if self.server.matchNickname(arguments[0]):
+				disconMsg = ":%s 433 %s :Nickname already in use" % (self.server.name, arguments[0])
+				self.message(disconMsg)
+				self.socket.close() # close the client's socket
+				del self.server.clients[self.socket]
+				# self.disconnect(disconMsg)
+				return
 			self.nickname = arguments[0]
 			print("Nickname set to " + self.nickname)
 
-		def join_handler():
-			print("Join_Handler")
+		# IRC JOIN command handler
+		def JOIN():
+			print("JOIN")
 			if len(arguments) < 1:
 				self.message("Not enough parameter")
 				return
@@ -130,16 +195,17 @@ class Client(object):
 				server.channels[arguments[0]] = Channel(self, arguments[0])
 				self.joinChannel(server.channels[arguments[0]])
 
-		def privmsg_handler():
+		# IRC PRIVMSG command handler
+		def PRIVMSG():
 			targetname = arguments[0]
 			message = arguments[1]
 			print("Targetname = " + targetname)
-			client = server.find_client(targetname)
+			client = server.findClient(targetname)
 			print("Client returned = %s", client)
-			if server.has_channel(targetname):
+			if server.hasChannel(targetname):
 				print("Send to channel")
-				channel = server.get_channel(targetname)
-				self.message_channel(channel, command, "%s :%s" % (channel.name, message))
+				channel = server.getChannel(targetname)
+				self.messageToChannel(channel, command, "%s :%s" % (channel.name, message))
 			elif client:
 				print("PM to user")
 				prefix = self.prefix
@@ -148,7 +214,8 @@ class Client(object):
 				print(messageToSend)
 				client.message(messageToSend)
 
-		def part_handler():
+		# IRC PART command handler
+		def PART():
 			if len(arguments) > 1:
 				partmsg = arguments[1]
 			else:
@@ -157,50 +224,55 @@ class Client(object):
 				if channelname:
 					if channelname in self.channels:
 						channel = self.channels[irc_lower(channelname)]
-						self.message_channel(channel, "PART", "%s :%s" % (channelname, partmsg), True)
+						self.messageToChannel(channel, "PART", "%s :%s" % (channelname, partmsg), True)
 						del self.channels[irc_lower(channelname)]
-						server.remove_member_from_channel(self, channelname)
+						server.removeMemberFromChannel(self, channelname)
 
-		def quit_handler():
+		# IRC QUIT command handler
+		def QUIT():
 			if len(arguments) < 1:
 				quitmsg = self.nickname
 			else:
 				quitmsg = arguments[0]
 			self.disconnect(quitmsg)
 
-		handler_table = {"USER": user_handler, "NICK": nick_handler, "JOIN": join_handler, "PRIVMSG": privmsg_handler, "PART": part_handler, "QUIT": quit_handler}
+		# table to look which function to call for what command
+		handler_table = {"USER": USER, "NICK": NICK, "JOIN": JOIN, "PRIVMSG": PRIVMSG, "PART": PART, "QUIT": QUIT}
 		server = self.server
 		try:
 			print("start of command handler")
 			if '\n' in command:
 				command = command.split('\n')[1]
 			print("command = " + command)
-			handler = handler_table.get(command)
+			handler = handler_table.get(command) # calling appropiate function
 			if handler:
 				handler()
 		except KeyError:
 			self.message("Unknown Command")
 
+	# disconnect a client from the server
 	def disconnect(self, quitmsg):
-		print(sys._getframe().f_code.co_name)
-		self.message("Error: %s" % quitmsg)
-		self.server.print_info("Disconnected connection from %s" % self.host)
-		self.socket.close()
-		self.server.remove_client(self, quitmsg)
+		messageToSend = ":%s %s" % (self.prefix, quitmsg)
+		self.message(messageToSend) # printing the quit message if provided
+		self.server.printInformation("Disconnected connection from %s" % self.host)
+		self.socket.close() # close the client's socket
+		self.server.removeClient(self, quitmsg) # removing client from the server class
 
-	def message_channel(self, channel, command, message, include_self=False):
+	# deliver message to a channel
+	def messageToChannel(self, channel, command, message, include_self=False):
 		print("message channel")
 		line = ":%s %s %s" % (self.prefix, command, message)
 		print(line)
 		for client in channel.members:
-			if client != self or include_self:
+			if client != self or include_self: # making sure the sender do not get the message
 				client.message(line)
 
 
-	def socket_readable_notification(self):
+	# read incoming information using readbuffer
+	def readNotification(self):
 		print(sys._getframe().f_code.co_name)
 		try:
-			data = self.socket.recv(2048)
+			data = self.socket.recv(2048) # receving stream of data
 			quitmsg = "EOT"
 		except socket.error as x:
 			data = ""
@@ -208,25 +280,27 @@ class Client(object):
 
 		if data:
 			self.readbuffer += socket_to_buffer(data)
-			self.__parse_read_buffer()
+			self.read()
 		else:
-			self.disconnect(quitmsg)
+			self.disconnect(quitmsg) # diconnect client if something goes wrong
 
 
-	def socket_writable_notification(self):
+	# write outgoing information using writebuffer
+	def writeNotification(self):
 		print(sys._getframe().f_code.co_name)
 		try:
 			sent = self.socket.send(buffer_to_socket(self.writebuffer))
 			self.writebuffer = self.writebuffer[sent:]
 		except socket.error as x:
-			self.disconnect(x)
+			self.disconnect(x) # disconnect client if exception happens
 
 
+	# let user join a particular channel
 	def joinChannel(self, channelToJoin):
 		print("in join channel")
-		channelToJoin.add_member(self)
-		self.channels[channelToJoin.name] = channelToJoin
-		self.message_channel(channelToJoin, "JOIN", channelToJoin.name, True)
+		channelToJoin.addMember(self) # add client to the channel class
+		self.channels[channelToJoin.name] = channelToJoin # adding channel name to the client class
+		self.messageToChannel(channelToJoin, "JOIN", channelToJoin.name, True)
 		whoinMsg = ":" + self.server.name + " 353 " + self.nickname + " = " + channelToJoin.name
 		for member in channelToJoin.members:
 			whoinMsg += " " + member.nickname
@@ -236,23 +310,40 @@ class Client(object):
 
 
 
+######################################################## CLIENT CLASS END #####################################################################
+
+
+
+
+######################################################## SERVER CLASS START ##############################################################################
+
+"""
+
+Handle all server activities
+
+"""
 class Server(object):
+
+	# constructor
 	def __init__(self):
 		self.address = ""
 		self.name = socket.getfqdn(self.address)[:63]
-		self.channels = {}
-		self.clients = {}
-		self.nicknames = {}
+		self.channels = {} # stores all the existing channels
+		self.clients = {}  # stores all the existing clients
+		self.nicknames = {} # stores all the nicknames of the clients
 
-	def find_client(self, nickname):
+	# find existing client using the nickname
+	def findClient(self, nickname):
 		for client in self.clients.values():
 			if client.nickname == nickname:
 				return client
 
-	def has_channel(self, name):
+	# return True if a channel exists, otherwise return False
+	def hasChannel(self, name):
 		return irc_lower(name) in self.channels
 
-	def get_channel(self, channelname):
+	# return channel object if exists
+	def getChannel(self, channelname):
 		if irc_lower(channelname) in self.channels:
 			channel = self.channels[irc_lower(channelname)]
 		else:
@@ -260,30 +351,38 @@ class Server(object):
 			self.channels[irc_lower(channelname)] = channel
 		return channel
 
-	def remove_member_from_channel(self, client, channelname):
+	# remove a client from a existing channel
+	def removeMemberFromChannel(self, client, channelname):
 		if irc_lower(channelname) in self.channels:
 			channel = self.channels[irc_lower(channelname)]
-			channel.remove_client(client)
+			channel.removeClient(client)
 
-	def remove_client(self, client, quitmsg):
-		client.message_related(":%s QUIT :%s" % (client.prefix, quitmsg))
+	# help removeMemberFromChannel() to remove a client from the channel
+	def removeClient(self, client, quitmsg):
+		client.message(":%s QUIT :%s" % (client.prefix, quitmsg))
 		for x in client.channels.values():
-			x.remove_client(client)
+			client.messageToChannel(x, "QUIT", quitmsg)
+			self.removeMemberFromChannel(client, x.name)
 		del self.clients[client.socket]
 
-	def remove_channel(self, channel):
+	# delete a channel from the server
+	def removeChannel(self, channel):
 		del self.channels[irc_lower(channel.name)]
 
-	def print_info(self, msg):
+	# print information with provided message
+	def printInformation(self, msg):
 		print(msg)
 		sys.stdout.flush()
 
+	# preparing server by creating sockets
 	def start(self):
+		# creating sockets
 		serversockets = []
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		port = 6667
 
+		# bind sockets, if fail close the server
 		try:
 			s.bind((self.address, port))
 		except:
@@ -294,43 +393,69 @@ class Server(object):
 		serversockets.append(s)
 		del s
 		print(f"Listening for connections on :{port}")
-		self.run(serversockets)
+		self.run(serversockets) # run the server
 
 
+	def matchNickname(self, nick):
+		for x in self.clients.values():
+			if x.nickname == nick:
+				return True
+		return False
+
+	# let the server run by checking any incoming requests
 	def run(self, serversockets):
 		while True:
-			(iwtd, owtd, ewtd) = select.select(serversockets + [x.socket for x in self.clients.values()], [x.socket for x in self.clients.values() if x.wite_queue_size() > 0], [], 10)
+			# reading sockets to check incoming and existing socket connection
+			(iwtd, owtd, ewtd) = select.select(serversockets + [x.socket for x in self.clients.values()], [x.socket for x in self.clients.values() if x.write() > 0], [], 10)
 
 			for x in iwtd:
 				if x in self.clients:
-					self.clients[x].socket_readable_notification()
+					self.clients[x].readNotification() # if the socket exists, read incoming information
 				else:
-					(conn, addr) = x.accept()
+					(conn, addr) = x.accept() # if the socket does not exists, accept the new connection
 
 					try:
-						self.clients[conn] = Client(self, conn)
-						self.print_info("Connection Accepted from %s:%s" % (addr[0], addr[1]))
+						self.clients[conn] = Client(self, conn) # creates Client class obeject
+						# if self.matchNickname(self.clients[conn].nickname):
+						# 	conn.close()
+						# 	continue
+						self.printInformation("Connection Accepted from %s:%s" % (addr[0], addr[1]))
 					except socket.error:
 						try:
-							conn.close()
+							conn.close() # if any error occurs, try to close the connection
 						except:
 							pass
 
 			for x in owtd:
 				if x in self.clients:
-					self.clients[x].socket_writable_notification()
+					self.clients[x].writeNotification() # sending information to the existing clients
 
-# Link for upper-lowercase string convert
+
+################################################ SERVER CLASS END ##########################################################################
+
+
+
+"""
+Next 4 lines of code taken from the following source:
+
+https://github.com/jrosdahl/miniircd/blob/master/miniircd
+"""
 _maketrans = str.maketrans
 _ircstring_translation = _maketrans(string.ascii_lowercase.upper() + "[]\\^", string.ascii_lowercase + "{}|~")
 def irc_lower(s):
 	return s.translate(_ircstring_translation)
 
+
+
+
+
+
+# main function to start the program
 def main():
-	server = Server()
+	server = Server() # create a Server class object
 	try:
-		server.start()
-	except KeyboardInterrupt:
+		server.start() # preparing server
+	except KeyboardInterrupt:   # close the server with a message if keyboard interruption happen
 		print(f"Server close")
 
 if __name__ == "__main__":
